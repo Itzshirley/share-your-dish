@@ -1,0 +1,10 @@
+<article class="recipe-card">
+  <a class="recipe-image" href="{{ url_for('recipe_detail', recipe_id=recipe.id) }}"><img src="{{ recipe.image_url }}" alt="{{ recipe.title }}" loading="lazy"></a>
+  <div class="recipe-card-body">
+    {% if recipe.is_budget_friendly %}<span class="budget-label">Easy on the budget</span>{% endif %}
+    <p class="recipe-category">{{ categories.get(recipe.category, recipe.category|title) }}</p>
+    <h3><a href="{{ url_for('recipe_detail', recipe_id=recipe.id) }}">{{ recipe.title }}</a></h3>
+    <p>{{ recipe.description|truncate(130) }}</p>
+    <a class="text-link" href="{{ url_for('recipe_detail', recipe_id=recipe.id) }}">Get the recipe <span aria-hidden="true">↗</span></a>
+  </div>
+</article>
