@@ -91,20 +91,40 @@ class ShareYourDishTests(unittest.TestCase):
         self.assertIn(b"photo-1528207776546-365bb710ee93", response.data)
         self.assertIn(b"photo-1547592166-23ac45744acd", response.data)
 
-    def test_missing_deployment_auth_config_keeps_catalog_available(self):
+    def test_missing_database_uses_working_temporary_sqlite_mode(self):
         app.config["IS_VERCEL"] = True
-        app.config["AUTH_ENABLED"] = False
+        app.config["TEMPORARY_STORAGE"] = True
+        app.config["AUTH_ENABLED"] = True
         try:
             home_response = self.client.get("/")
-            signup_response = self.client.get("/signup")
-            login_response = self.client.get("/login")
             self.assertEqual(home_response.status_code, 200)
-            self.assertIn(b"temporary mode", home_response.data)
-            self.assertEqual(signup_response.status_code, 503)
-            self.assertIn(b"DATABASE_URL", signup_response.data)
-            self.assertEqual(login_response.status_code, 503)
+            self.assertIn(b"Temporary storage is active", home_response.data)
+            signup_response = self.client.post(
+                "/signup",
+                data={"username": "temporary-cook", "email": "temporary@example.com", "password": "long-password"},
+                follow_redirects=True,
+            )
+            self.assertEqual(signup_response.status_code, 200)
+            recipe_response = self.client.post(
+                "/recipe/new",
+                data={
+                    "title": "Temporary Lentil Lunch",
+                    "category": "lunch",
+                    "description": "A quick pantry meal.",
+                    "ingredients": "Lentils\nTomato",
+                    "instructions": "Simmer and serve.",
+                    "image": (io.BytesIO(b"temporary-image"), "lunch.png", "image/png"),
+                },
+                content_type="multipart/form-data",
+                follow_redirects=True,
+            )
+            self.assertEqual(recipe_response.status_code, 200)
+            self.assertIn(b"Temporary Lentil Lunch", recipe_response.data)
+            recipe = Recipe.query.filter_by(title="Temporary Lentil Lunch").one()
+            self.assertTrue(recipe.image.startswith("/uploads/"))
         finally:
             app.config["IS_VERCEL"] = False
+            app.config["TEMPORARY_STORAGE"] = False
             app.config["AUTH_ENABLED"] = True
 
     def test_signup_login_and_private_recipe_submission(self):

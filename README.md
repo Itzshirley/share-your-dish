@@ -20,7 +20,9 @@ Open http://127.0.0.1:5000. SQLite data and local uploads are stored in the igno
 
 Deploy this project root to Vercel. `app.py` exports the Flask WSGI application as `app`, which Vercel detects as a Python function. For a complete deployment, add `SECRET_KEY` and `DATABASE_URL` in Vercel Project Settings → Environment Variables, apply them to Production (and Preview if used), then redeploy. `DATABASE_URL` must point to a managed PostgreSQL database for durable users and recipes; SQLite on Vercel is ephemeral. A new database starts with 21 budget-friendly recipes across all seven categories.
 
-If either variable is missing, the public catalog now starts in temporary mode rather than failing with an unavailable page. Account creation, login, and recipe sharing are disabled with a setup notice until both variables are configured. Connect a **public** Vercel Blob store to persist user-uploaded recipe photos and set `BLOB_STORE_ID`/OIDC credentials or `BLOB_READ_WRITE_TOKEN`. Without Blob credentials, uploads are disabled on Vercel; local development uploads use `instance/uploads/`.
+`DATABASE_URL` is optional: without it, the app uses embedded SQLite and account creation, login, recipe sharing, and local uploads still work. On Vercel this fallback is stored in `/tmp`, which is ephemeral and may be replaced between function instances, so new accounts, recipes, and photos are not guaranteed to persist. Set `DATABASE_URL` to managed PostgreSQL for durable records. Connect a **public** Vercel Blob store to persist uploaded photos and set `BLOB_STORE_ID`/OIDC credentials or `BLOB_READ_WRITE_TOKEN`; without Blob, image uploads use temporary local storage.
+
+Set a stable, long random `SECRET_KEY` in Vercel project settings so users remain signed in across function instances. If it is omitted, the site still runs, but generated session keys may invalidate sessions when Vercel starts a different instance.
 
 The included food photography uses remote Unsplash image URLs. User uploads must be JPEG, PNG, WebP, or GIF and are limited to 4 MiB to fit within Vercel's request-size limit.
 

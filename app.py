@@ -25,19 +25,20 @@ if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
 elif database_url and database_url.startswith("postgresql://"):
     database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-AUTH_ENABLED = not IS_VERCEL or bool(database_url and os.getenv("SECRET_KEY"))
-if IS_VERCEL and not database_url:
+TEMPORARY_STORAGE = IS_VERCEL and not database_url
+if TEMPORARY_STORAGE:
     app_database_url = f"sqlite:///{INSTANCE_DIR / 'share_your_dish.db'}"
     print("WARNING: DATABASE_URL is missing; using temporary SQLite. Data will not persist across Vercel instances.")
 else:
     app_database_url = database_url or f"sqlite:///{INSTANCE_DIR / 'share_your_dish.db'}"
 if IS_VERCEL and not os.getenv("SECRET_KEY"):
-    print("WARNING: SECRET_KEY is missing; login, signup, and recipe submission are disabled until configured.")
+    print("WARNING: SECRET_KEY is missing; sessions may not persist across Vercel instances.")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
 app.config["IS_VERCEL"] = IS_VERCEL
-app.config["AUTH_ENABLED"] = AUTH_ENABLED
+app.config["AUTH_ENABLED"] = True
+app.config["TEMPORARY_STORAGE"] = TEMPORARY_STORAGE
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
 app.config["SQLALCHEMY_DATABASE_URI"] = app_database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -128,7 +129,7 @@ def shared_template_data():
         "categories": CATEGORIES,
         "current_user": current_user(),
         "year": datetime.now().year,
-        "deployment_setup_needed": app.config["IS_VERCEL"] and not app.config["AUTH_ENABLED"],
+        "temporary_storage": app.config["TEMPORARY_STORAGE"],
     }
 
 
@@ -158,8 +159,6 @@ def save_image(upload) -> str | None:
     extension = extensions.get(content_type)
     if not extension:
         raise ValueError("Choose a JPG, PNG, WebP, or GIF image.")
-    if os.getenv("VERCEL") and not (os.getenv("BLOB_STORE_ID") or os.getenv("BLOB_READ_WRITE_TOKEN")):
-        raise ValueError("Connect a public Vercel Blob store before uploading recipe photos.")
     data = upload.read(4 * 1024 * 1024 + 1)
     if len(data) > 4 * 1024 * 1024:
         raise ValueError("Images must be 4 MB or smaller.")
@@ -264,8 +263,6 @@ def recipe_detail(recipe_id: int):
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
-    if not app.config["AUTH_ENABLED"]:
-        return render_template("deployment_setup.html"), 503
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         email = request.form.get("email", "").strip().lower()
@@ -286,8 +283,6 @@ def signup():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if not app.config["AUTH_ENABLED"]:
-        return render_template("deployment_setup.html"), 503
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
