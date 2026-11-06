@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Deployment setup needed | Share Your Dish{% endblock %}
+{% block content %}
+<main class="page-main">
+  <section class="form-panel">
+    <p class="eyebrow">A little setup is still needed</p>
+    <h1>Accounts aren't ready yet.</h1>
+    <p>The recipe site is online, but account features need persistent Vercel settings before they can safely be enabled.</p>
+    <div class="setup-steps">
+      <p><strong>1.</strong> Add a managed PostgreSQL connection as <code>DATABASE_URL</code> in Vercel Project Settings → Environment Variables.</p>
+      <p><strong>2.</strong> Add a long random <code>SECRET_KEY</code> in the same environment.</p>
+      <p><strong>3.</strong> Redeploy the project after saving the variables.</p>
+    </div>
+    <a class="button" href="{{ url_for('home') }}">Back to recipes</a>
+  </section>
+</main>
+{% endblock %}

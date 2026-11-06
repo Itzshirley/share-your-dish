@@ -18,7 +18,9 @@ Open http://127.0.0.1:5000. SQLite data and local uploads are stored in the igno
 
 ## Vercel deployment
 
-Deploy this project root to Vercel. `app.py` exports the Flask WSGI application as `app`, which Vercel detects as a Python function. Set `SECRET_KEY` and `DATABASE_URL` in the Vercel project. `DATABASE_URL` must point to a managed PostgreSQL database for durable users and recipes; SQLite on Vercel is ephemeral. A new database starts with 21 budget-friendly recipes across all seven categories. Connect a **public** Vercel Blob store to persist user-uploaded recipe photos and set `BLOB_STORE_ID`/OIDC credentials or `BLOB_READ_WRITE_TOKEN`. Without Blob credentials, development uploads go to local `instance/uploads/` and are not persistent in Vercel deployments.
+Deploy this project root to Vercel. `app.py` exports the Flask WSGI application as `app`, which Vercel detects as a Python function. For a complete deployment, add `SECRET_KEY` and `DATABASE_URL` in Vercel Project Settings → Environment Variables, apply them to Production (and Preview if used), then redeploy. `DATABASE_URL` must point to a managed PostgreSQL database for durable users and recipes; SQLite on Vercel is ephemeral. A new database starts with 21 budget-friendly recipes across all seven categories.
+
+If either variable is missing, the public catalog now starts in temporary mode rather than failing with an unavailable page. Account creation, login, and recipe sharing are disabled with a setup notice until both variables are configured. Connect a **public** Vercel Blob store to persist user-uploaded recipe photos and set `BLOB_STORE_ID`/OIDC credentials or `BLOB_READ_WRITE_TOKEN`. Without Blob credentials, uploads are disabled on Vercel; local development uploads use `instance/uploads/`.
 
 The included food photography uses remote Unsplash image URLs. User uploads must be JPEG, PNG, WebP, or GIF and are limited to 4 MiB to fit within Vercel's request-size limit.
 

@@ -91,6 +91,22 @@ class ShareYourDishTests(unittest.TestCase):
         self.assertIn(b"photo-1528207776546-365bb710ee93", response.data)
         self.assertIn(b"photo-1547592166-23ac45744acd", response.data)
 
+    def test_missing_deployment_auth_config_keeps_catalog_available(self):
+        app.config["IS_VERCEL"] = True
+        app.config["AUTH_ENABLED"] = False
+        try:
+            home_response = self.client.get("/")
+            signup_response = self.client.get("/signup")
+            login_response = self.client.get("/login")
+            self.assertEqual(home_response.status_code, 200)
+            self.assertIn(b"temporary mode", home_response.data)
+            self.assertEqual(signup_response.status_code, 503)
+            self.assertIn(b"DATABASE_URL", signup_response.data)
+            self.assertEqual(login_response.status_code, 503)
+        finally:
+            app.config["IS_VERCEL"] = False
+            app.config["AUTH_ENABLED"] = True
+
     def test_signup_login_and_private_recipe_submission(self):
         response = self.client.post(
             "/signup",

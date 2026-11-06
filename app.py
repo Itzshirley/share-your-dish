@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 import uuid
 from datetime import datetime, timezone
 from functools import wraps
@@ -15,7 +16,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from seed_recipes import STARTER_RECIPES
 
 BASE_DIR = Path(__file__).resolve().parent
-INSTANCE_DIR = Path(os.getenv("INSTANCE_DIR", "/tmp/share-your-dish" if os.getenv("VERCEL") else BASE_DIR / "instance"))
+IS_VERCEL = bool(os.getenv("VERCEL"))
+INSTANCE_DIR = Path(os.getenv("INSTANCE_DIR", "/tmp/share-your-dish" if IS_VERCEL else BASE_DIR / "instance"))
 INSTANCE_DIR.mkdir(exist_ok=True)
 
 database_url = os.getenv("DATABASE_URL")
@@ -23,13 +25,21 @@ if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
 elif database_url and database_url.startswith("postgresql://"):
     database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-if os.getenv("VERCEL") and (not database_url or not os.getenv("SECRET_KEY")):
-    raise RuntimeError("Vercel requires SECRET_KEY and DATABASE_URL. See the deployment README.")
+AUTH_ENABLED = not IS_VERCEL or bool(database_url and os.getenv("SECRET_KEY"))
+if IS_VERCEL and not database_url:
+    app_database_url = f"sqlite:///{INSTANCE_DIR / 'share_your_dish.db'}"
+    print("WARNING: DATABASE_URL is missing; using temporary SQLite. Data will not persist across Vercel instances.")
+else:
+    app_database_url = database_url or f"sqlite:///{INSTANCE_DIR / 'share_your_dish.db'}"
+if IS_VERCEL and not os.getenv("SECRET_KEY"):
+    print("WARNING: SECRET_KEY is missing; login, signup, and recipe submission are disabled until configured.")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "local-only-change-me")
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
+app.config["IS_VERCEL"] = IS_VERCEL
+app.config["AUTH_ENABLED"] = AUTH_ENABLED
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
-app.config["SQLALCHEMY_DATABASE_URI"] = database_url or f"sqlite:///{INSTANCE_DIR / 'share_your_dish.db'}"
+app.config["SQLALCHEMY_DATABASE_URI"] = app_database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["UPLOAD_FOLDER"] = INSTANCE_DIR / "uploads"
 app.config["UPLOAD_FOLDER"].mkdir(exist_ok=True)
@@ -114,7 +124,12 @@ class Recipe(db.Model):
 
 @app.context_processor
 def shared_template_data():
-    return {"categories": CATEGORIES, "current_user": current_user(), "year": datetime.now().year}
+    return {
+        "categories": CATEGORIES,
+        "current_user": current_user(),
+        "year": datetime.now().year,
+        "deployment_setup_needed": app.config["IS_VERCEL"] and not app.config["AUTH_ENABLED"],
+    }
 
 
 def current_user() -> User | None:
@@ -125,6 +140,8 @@ def current_user() -> User | None:
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
+        if not app.config["AUTH_ENABLED"]:
+            return render_template("deployment_setup.html"), 503
         if not current_user():
             flash("Please log in to continue.", "notice")
             return redirect(url_for("login", next=request.path))
@@ -247,6 +264,8 @@ def recipe_detail(recipe_id: int):
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
+    if not app.config["AUTH_ENABLED"]:
+        return render_template("deployment_setup.html"), 503
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         email = request.form.get("email", "").strip().lower()
@@ -267,6 +286,8 @@ def signup():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if not app.config["AUTH_ENABLED"]:
+        return render_template("deployment_setup.html"), 503
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
